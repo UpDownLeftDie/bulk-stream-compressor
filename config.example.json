@@ -1,5 +1,6 @@
 {
-    "inputFoler": "C:\\",
-    "outputFolder": "C:\\",
-    "minLengthSec": 300 
+    "inputFolder": "videos",
+    "outputFolder": "output",
+    "minLengthSec": 300 ,
+    "ignoreFileFormats": []
 }

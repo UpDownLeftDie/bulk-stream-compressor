@@ -24,4 +24,6 @@ jspm_packages/
 
 config.json
 
+.vscode/
 videos/
+output/
