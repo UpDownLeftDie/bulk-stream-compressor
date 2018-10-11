@@ -1,0 +1,22 @@
+{
+  "name": "bulk-stream-compressor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/UpDownLeftDie/bulk-stream-compressor.git"
+  },
+  "author": "UpDownLeftDie",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/UpDownLeftDie/bulk-stream-compressor/issues"
+  },
+  "homepage": "https://github.com/UpDownLeftDie/bulk-stream-compressor#readme",
+  "dependencies": {
+    "lodash": "^4.17.11"
+  }
+}
