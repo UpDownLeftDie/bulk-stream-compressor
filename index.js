@@ -1,15 +1,17 @@
 const _ = require('lodash');
 const fs = require('fs');
-const spawnSync = require('child_process').spawnSync;
 const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
 
-const FILE_FORMATS = [".mp4", ".flv", ".mkv"];v
+const FILE_FORMATS = [".mp4", ".flv", ".mkv"];
 
 const config = loadConfig();
 
+main();
+
+
 function loadConfig() {
-    let config = JSON.parse(fs.readFileSync('config.json', 'utf8'));
+    let config = require('./config.json');
     config.fileFormats = FILE_FORMATS;
     if (config.ignoreFileFormats && config.ignoreFileFormats.length) {
         config.ignoreFileFormats.forEach(ignoredFileFormat => {
@@ -22,11 +24,16 @@ function loadConfig() {
     return config;
 }
 
-main();
-
 async function main() {
-    const { inputFolder, fileFormats } = config;
-    const files = await getAllFiles(inputFolder, fileFormats);
+    const { fileFormats, inputFolder, minLengthSec } = config;
+    let files = await getAllFiles(inputFolder, fileFormats);
+    if (minLengthSec) {
+        files = cleanUp(files, inputFolder, minLengthSec);
+    }
+    console.log('starting convert videos');
+    const promises = convertVideos(files, config);
+    await promises;
+    console.log('finished convert videos');
 }
 
 async function getAllFiles(dir, fileFormats) {
@@ -34,7 +41,7 @@ async function getAllFiles(dir, fileFormats) {
     files = await files.reduce(async (previousPromise, file) => {
         let filterdFiles = await previousPromise;
         const index = fileFormats.indexOf(path.extname(file).toLowerCase());
-        if (index !== -1) {
+        if (index > -1) {
             const metadata = await readVideoFile(path.join(dir, file));
             filterdFiles[file] = metadata;
         }
@@ -53,17 +60,80 @@ function readVideoFile(filePath) {
     });
 }
 
-// function cleanUp(){
+function cleanUp(files, dir, minLengthSec = 0){
+    let remainingFiles = {};
+    _.forEach(files, (metadata, filename) => {
+        const filePath = path.join(dir, filename);
+        const duration = _.get(metadata, 'format.duration');
+        if (duration < minLengthSec) {
+            console.log(`**DELETING** ${filePath}`);
+            deleteFile(filePath);
+        } else {
+            remainingFiles[filename] = metadata;
+        }
+    });
+    return remainingFiles;
+}
 
-//     deleteFile();
-// }
+async function deleteFile(filePath) {
+    return new Promise((resolve, reject) => {
+        fs.unlink(filePath, (err) => {
+            if (err) reject(err);
+            console.log(`${filePath} was deleted`);
+            resolve();
+          });
+    });
+}
 
+async function convertVideos(files, config) {
+    const {
+        inputFolder,
+        outputFolder,
+        targetBitrate
+    } = config;
 
+    const commands = await _.map(files, (metadata, filename) => {
+        return new Promise((resolve, reject) => {
+            const inputFilePath = path.join(inputFolder, filename);
+            const outputFilePath = path.join(outputFolder, getOutputName(filename, 'mp4'));
+            return ffmpeg(inputFilePath)
+                .videoCodec('libx265')
+                .format('mp4')
+                .outputOptions([
+                    '-passlogfile',
+                    './logfile',
+                    '-b:v', targetBitrate,
+                ])
+                .output(outputFilePath)
+                .on('error', function(err, stdout, stderr) {
+                    console.log('Cannot process video: ' + err.message, stdout, stderr);
+                    reject(err);
+                  })
+                .on('end', () => {
+                    console.log('finished first pass!');
+                    resolve();
+                    // ffmpeg(inputFilePath)
+                    //     .audioCodec('libfaac')
+                    //     .videoCodec('libx265')
+                    //     .format('mp4')
+                    //     .outputOptions([
+                    //         '-passlogfile',
+                    //         './logfile',
+                    //         '-b:v', targetBitrate,
+                    //         '-x265-params',
+                    //         'pass=2',
+                    //         '-movflags',
+                    //         '+faststart'
+                    //     ])
+                    //     .output(outputFilePath);
+                });
+        });
+    });
 
-// function deleteFile() {
-
-// }
-
-// function createFFmpegProcess() {
-
-// }
+    return Promise.all(commands);
+};
+    
+function getOutputName(filename, newExt) {
+    const fileExt = path.extname(filename);
+    return `${filename.slice(0, -fileExt.length)}.${newExt}`;
+}

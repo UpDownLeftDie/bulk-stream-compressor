@@ -1,6 +1,7 @@
 {
     "inputFolder": "videos",
     "outputFolder": "output",
-    "minLengthSec": 300 ,
-    "ignoreFileFormats": []
+    "minLengthSec": 300,
+    "ignoreFileFormats": [],
+    "targetBitrate": "8000k"
 }
