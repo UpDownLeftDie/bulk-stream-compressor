@@ -27,3 +27,6 @@ config.json
 .vscode/
 videos/
 output/
+
+*.temp
+*.cutree

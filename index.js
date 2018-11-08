@@ -1,7 +1,9 @@
 const _ = require('lodash');
 const fs = require('fs');
 const path = require('path');
-const ffmpeg = require('fluent-ffmpeg');
+const ffprobe = require('fluent-ffmpeg');
+const ffmpeg = 'bin\\ffmpeg.exe';
+const spawnSync = require('child_process').spawnSync;
 
 const FILE_FORMATS = [".mp4", ".flv", ".mkv"];
 
@@ -53,7 +55,7 @@ async function getAllFiles(dir, fileFormats) {
 
 function readVideoFile(filePath) {
     return new Promise((resolve, reject) => {
-        ffmpeg.ffprobe(filePath, function(err, metadata) {
+        ffprobe.ffprobe(filePath, function(err, metadata) {
             if (err) reject(err);
             resolve(metadata);
         });
@@ -96,37 +98,63 @@ async function convertVideos(files, config) {
         return new Promise((resolve, reject) => {
             const inputFilePath = path.join(inputFolder, filename);
             const outputFilePath = path.join(outputFolder, getOutputName(filename, 'mp4'));
-            return ffmpeg(inputFilePath)
-                .videoCodec('libx265')
-                .format('mp4')
-                .outputOptions([
-                    '-passlogfile',
-                    './logfile',
-                    '-b:v', targetBitrate,
-                ])
-                .output(outputFilePath)
-                .on('error', function(err, stdout, stderr) {
-                    console.log('Cannot process video: ' + err.message, stdout, stderr);
-                    reject(err);
-                  })
-                .on('end', () => {
-                    console.log('finished first pass!');
-                    resolve();
-                    // ffmpeg(inputFilePath)
-                    //     .audioCodec('libfaac')
-                    //     .videoCodec('libx265')
-                    //     .format('mp4')
-                    //     .outputOptions([
-                    //         '-passlogfile',
-                    //         './logfile',
-                    //         '-b:v', targetBitrate,
-                    //         '-x265-params',
-                    //         'pass=2',
-                    //         '-movflags',
-                    //         '+faststart'
-                    //     ])
-                    //     .output(outputFilePath);
-                });
+            const pass1Args = [
+                '-y',
+                '-i',
+                inputFilePath,
+                '-c:v',
+                'libx265',
+                '-b:v',
+                targetBitrate,
+                '-x265-params',
+                'pass=1',
+                '-an',
+                '-f',
+                'mp4',
+                'NUL'
+            ];
+            const pass2Args = [
+                '-i',
+                inputFilePath,
+                '-c:v',
+                'libx265',
+                '-b:v',
+                targetBitrate,
+                '-x265-params',
+                'pass=2',
+                '-movflags',
+                '+faststart',
+                '-c:a',
+                'aac',
+                '-b:a',
+                '160k',
+                outputFilePath
+            ];
+
+            const ffmpegProcess1 = spawnSync(ffmpeg, pass1Args);
+            let stderr = ffmpegProcess1.stderr.toString();
+            let { status } = ffmpegProcess1;
+            let stdout = ffmpegProcess1.stdout.toString();
+            if (stderr) {
+                console.log(`\nError during Pass 1: ${stderr}`);
+                reject();
+            }
+            console.log(`\nPass 1 status: ${status}`);
+            console.log(`\nPass 1stdout: ${stdout}`);
+
+            const ffmpegProcess2 = spawnSync(ffmpeg, pass2Args);
+            stderr = ffmpegProcess2.stderr.toString();
+            status = ffmpegProcess2.status;
+            stdout = ffmpegProcess2.stdout.toString();
+            if (stderr) {
+                console.log(`\nError during Pass 2: ${stderr}`);
+                reject();
+            }
+            console.log(`\nPass 2 status: ${status}`);
+            console.log(`\nPass 2 stdout: ${stdout}`);
+            // TODO delete inputFilePath on success
+            // deleteFile(inputFilePath);
+            resolve();
         });
     });
 
